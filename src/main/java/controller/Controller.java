@@ -41,12 +41,6 @@ public class Controller {
         if (onAuct.equals("true"))
             return "antique is already on auct";
         jedis.hset("antique_" + id, "on_auct", "true");
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-
-            }
-        }).start();
         return "antique is now on auct";
     }
 
@@ -66,24 +60,40 @@ public class Controller {
             return "antique id does not exist";
         }
 
-        String onAuct = jedis.hget("antique_" + antiqueId, "on_auct");
-        if (onAuct.equals("false"))
-            return "antique is not on auct";
         int intPrice = Integer.parseInt(price);
-        if (intPrice > budget)
-            return "inefficient money";
-        if (intPrice <= basePrice)
-            return "base price is higher";
+        String reject = rejectBid(antiqueId, budget, basePrice, intPrice);
+        if (reject != null) return reject;
         String buyerId = jedis.hget("antique_" + antiqueId, "buyer");
+
+        payMoneyBack(basePrice, buyerId);
+        acceptBid(bidderId, antiqueId, price, budget, intPrice);
+        return "successful";
+    }
+
+    private void payMoneyBack(int basePrice, String buyerId) {
         if (buyerId != null) {
             String currentBudget = jedis.hget("bidder_" + buyerId, "budget");
             jedis.hset("bidder_" + buyerId, "budget", String.valueOf(basePrice + Integer.parseInt(currentBudget)));
         }
+    }
+
+    private String rejectBid(String antiqueId, int budget, int basePrice, int intPrice) {
+        String onAuct = jedis.hget("antique_" + antiqueId, "on_auct");
+        if (onAuct.equals("false"))
+            return "antique is not on auct";
+        if (intPrice > budget)
+            return "inefficient money";
+        if (intPrice <= basePrice)
+            return "base price is higher";
+        return null;
+    }
+
+    private void acceptBid(String bidderId, String antiqueId, String price, int budget, int intPrice) {
         jedis.hset("bidder_" + bidderId, "budget", String.valueOf(budget - intPrice));
         jedis.hset("antique_" + antiqueId, "price", price);
         jedis.hset("antique_" + antiqueId, "buyer", bidderId);
         jedis.expire("antique_" + antiqueId, 10);
-        return "successful";
     }
+
 
 }
